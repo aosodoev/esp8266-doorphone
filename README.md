@@ -5,7 +5,7 @@
 
 Crude door phone and RFID lock project for my yard gates door.
 
-Handset unit serves as a gateway creating soft AP for door unit and connecting to existing WiFi network and MQTT brocker.
+Handset unit serves as WiFi gateway/extender creating soft AP for door unit and connecting to existing WiFi network and MQTT brocker.
 
 Basic keys management and lock control via home assistant.
 
