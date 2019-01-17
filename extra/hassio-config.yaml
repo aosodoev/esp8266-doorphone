@@ -1,0 +1,77 @@
+#
+# Copy config sections to corresponding hassio configuration files
+#
+
+# Keyfob UID and comment fields
+input_text:
+  door_phone_key_management_key:
+    name: Access key
+    min: 0
+    max: 11
+    initial: ""
+    pattern: '[0-9a-fA-F]{2}:[0-9a-fA-F]{2}:[0-9a-fA-F]{2}:[0-9a-fA-F]{2}'
+  door_phone_key_management_comment:
+    name: Comment
+    min: 0
+    max: 100
+    initial: ""
+
+# MQTT lock component    
+lock:
+  - platform: mqtt
+    name: Backyard gates
+    state_topic: "yard/gates/lock/status"
+    command_topic: "yard/gates/lock/set"
+    payload_lock: "LOCK"
+    payload_unlock: "UNLOCK"
+    qos: 1
+
+# some scripts to add/remove and list known RFID keyfobs
+script:
+  door_phone_add_key:
+    alias: "Add key"
+    sequence:
+      - service: mqtt.publish
+        data_template:
+          topic: yard/gates/keys/add
+          payload: '{{ states(''input_text.door_phone_key_management_key'') }};{{ states(''input_text.door_phone_key_management_comment'') }}'
+  door_phone_delete_key:
+    alias: "Delete key"
+    sequence:
+      - service: mqtt.publish
+        data_template:
+          topic: yard/gates/keys/delete
+          payload: '{{ states(''input_text.door_phone_key_management_key'') }}'
+  door_phone_list_keys:
+    alias: "List keys"
+    sequence:
+      - service: mqtt.publish
+        data_template:
+          topic: yard/gates/keys/list
+          payload: 'ALL'
+
+group:
+  door_phone_management:
+    name: Door phone management
+    control: hidden
+    entities:
+      - input_text.door_phone_key_management_key
+      - input_text.door_phone_key_management_comment
+      - script.door_phone_add_key
+      - script.door_phone_delete_key
+      - script.door_phone_list_keys
+
+# Persistent notification component for status messages
+automation:
+  - alias: Door phone status
+    trigger:
+    - platform: mqtt
+      topic: yard/gates/status
+    condition: []
+    action:
+    - alias: ''
+      data_template:
+        message: '{{ trigger.payload }}'
+        title: Doorphone status update
+        notification_id: doorphone_mqtt_status
+      service: persistent_notification.create

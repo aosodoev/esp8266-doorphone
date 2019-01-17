@@ -1,0 +1,4 @@
+.pioenvs
+.piolibdeps
+.clang_complete
+src/AP_credentials.h
