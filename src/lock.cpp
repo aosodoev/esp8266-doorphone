@@ -11,6 +11,7 @@
 #define ACTUATOR_DELAY_PULL 250 // probably pulling load would be slower
 #define ACTUATOR_DELAY_RELEASE 250
 #define ACTUATOR_PULL_DUTY 64
+#define ACTUATOR_RELEASE_DUTY 128
 #define TONE_PERIOD 1000
 
 unsigned long toneRepeat = 0, lockTimeout = 0, debounce = 0, doorSwitchDebounce = 0;
@@ -29,17 +30,22 @@ void setup() {
   digitalWrite(MOTOR_RIGHT, LOW);
   lastControlState = digitalRead(CONTROL_PIN);
 
-  // combine first beep and motor delays
+  // three short beeps on boot
+  // combine first beep and motor delay
   digitalWrite(BUZZER, HIGH);
   
-  // Make sure motor is out
+  // Make sure lock bolt is released (locked) on boot
   digitalWrite(MOTOR_RIGHT, HIGH);
+  analogWrite(MOTOR_LEFT, 255 - ACTUATOR_RELEASE_DUTY);
   delay(ACTUATOR_DELAY_RELEASE);
+  digitalWrite(MOTOR_LEFT, LOW);
   digitalWrite(MOTOR_RIGHT, LOW);
+
 
   delay(300-ACTUATOR_DELAY_RELEASE);
   digitalWrite(BUZZER, LOW);
 
+  // make it 3
   for (int i = 0; i<2; i++) {
     delay(300);
     digitalWrite(BUZZER, HIGH);
@@ -48,14 +54,14 @@ void setup() {
   }
   
   // change timer1 PWM frequency for pin 4
-  // cbi(TCCR1, CS11); // CK/2048
-  // sbi(TCCR1, CS10); // uncomment to make it CK/4096
+  cbi(TCCR1, CS11); // CK/2048
+  sbi(TCCR1, CS10); // uncomment to make it CK/4096
   // cbi(TCCR1, CS12); // CK/512
 }
 
 void loop() {
 
-  // avoid ESP powercycle pulse 
+  // avoid ESP power up GPIO pulse 
   if (millis() < 100) {
     return;
   }
@@ -93,13 +99,18 @@ void loop() {
   unsigned long t = millis() - lockTimeout;
 
   if (lockOpen && ((doorState != initialDoorState) || (t >= LOCK_TIMEOUT))) {
-    if (t < 400) { // wait until motor stops completely
-      delay(400 - t);
-    }
     digitalWrite(BUZZER, LOW);
     digitalWrite(MOTOR_LEFT, LOW);
+    if (t < 400) { // wait until motor stops completely after pull pulse
+      delay(400 - t);
+    }
+    // give motor and capacitor some time to rest and recharge
+    // after pulling lock bolt otherwise stall current is too high
+    delay(200);
     digitalWrite(MOTOR_RIGHT, HIGH);
+    analogWrite(MOTOR_LEFT, 255 - ACTUATOR_RELEASE_DUTY);
     delay(ACTUATOR_DELAY_RELEASE);
+    digitalWrite(MOTOR_LEFT, LOW);
     digitalWrite(MOTOR_RIGHT, LOW);
     lockOpen = false;
   }
