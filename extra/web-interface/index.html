@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html>
+    <head>
+	<meta charset="utf-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>Настройки</title>
+	<link rel="stylesheet" href="bulma.min.css">
+	<style type="text/css">
+	  .keys-enter-active, .keys-leave-active {
+	      transition: all 0.5s;
+	  }
+	  .keys-enter, .keys-leave-to /* .list-leave-active below version 2.1.8 */ {
+	      opacity: 0;
+	      transform: translateX(100px);
+	  }
+	</style>
+	<script src="vue.min.js"></script>
+	<script>
+	  var app;
+	  var connection = new WebSocket('ws://' + location.hostname + ':81/', ['arduino']);
+	  connection.onopen = function () {
+	      app.connected = true;
+	  };
+	  connection.onerror = function (error) {
+	      console.log('WebSocket Error ', error);
+	  };
+	  connection.onmessage = function (e) {
+	      console.log('Server: ', e.data);
+	      var settings = JSON.parse(e.data);
+	      app.keys = settings.keys;
+	      app.unknown_key.guid = settings.unknown_key;
+	      app.current_ringtone = settings.ringtone;
+	  };
+	  connection.onclose = function () {
+	      console.log('WebSocket connection closed');
+	      app.connected = false;
+	  };
+	  document.addEventListener("DOMContentLoaded", function() {
+	     app = new Vue({
+		 el: '#app',
+		 data: {
+		     current_ringtone: '',
+		    
+		     unknown_key: {
+			 guid: '',
+			 comment: '',
+			 validate: false
+		     },
+		     
+		     ringtones: [
+			 { name: "Звонок", filename: "bell.g722" },
+			 { name: "Эхо", filename: "echo.g722" },
+			 { name: "Живая трель", filename: "bird.g722" },
+			 { name: "Электр. трель", filename: "chirp.g722" }
+		     ],
+		     
+		     keys: [],
+
+		     connected: true
+		 },
+		 methods: {
+		     addKey: function() {
+			 this.unknown_key.validate = true;
+			 if (this.unknown_key.comment !== '') {
+			     connection.send("key_add:" + this.unknown_key.guid + ";" + this.unknown_key.comment);
+			 }
+		     },
+		     deleteKey: function(guid) {
+			 for (var i = 0; i < this.keys.length; i++) {
+			     if (this.keys[i].guid === guid) {
+				 if (confirm("Удалить ключ \"" + this.keys[i].comment + "\"?")) {
+				     // delete key for real
+				     connection.send("key_del:" + guid);
+				 }
+			     }
+			 }
+		     },
+		     setRingtone: function(filename) {
+			 this.current_ringtone = filename;
+			 connection.send("ringtone:" + this.current_ringtone);
+		     }
+		 }
+	     });
+	 });	  
+	</script>
+    </head>
+    <body>
+	<section class="section" id="app">
+	    <div class="container">
+		<h1 class="title is-3">
+		    Настройки
+		</h1>
+
+		<h2 class="title is-4">Ключи</h2>
+		<article v-if="unknown_key.guid != ''" class="message is-warning">
+		  <div class="message-header">
+		    <p>Неизвестный ключ</p>
+		  </div>
+		  <div class="message-body">
+		    <div class="field">
+		      <label class="label">GUID</label>
+		      <div class="control">{{ unknown_key.guid }}</div>
+		    </div>
+		    <div class="field">
+		      <label class="label">Имя ключа</label>
+		      <div class="control">
+			<input class="input" type="text" placeholder="Например, имя владельца ключа" v-model="unknown_key.comment" :class="[ unknown_key.validate && unknown_key.comment === '' ? 'is-danger' : '']">
+		      </div>
+		      <p class="help is-danger" v-if="unknown_key.validate && unknown_key.comment === ''">Необходимо указать имя ключа.</p>
+		    </div>
+		    <div class="field is-clearfix">
+		      <div class="control is-pulled-right">
+			<button class="button is-info" @click="addKey">
+			  Добавить
+			</button>
+		      </div>
+		    </div>
+		  </div>
+		</article>
+		<div class="notification" v-if="keys.length == 0">Нет ни одного ключа, поднесите новый ключ к сканеру чтобы добавить.</div>
+		<transition-group name="keys" tag="ul" class="list">
+		  <li class="list-item is-clearfix" v-for="key in keys" v-bind:key="key.guid">{{ key.comment }} <div class="control is-pulled-right"><button @click="deleteKey(key.guid)" class="delete"></button></div></li>
+		</transition-group>
+
+		
+		<h2 class="title is-4">Рингтон</h2>
+		<ul class="list">
+		  <li @click="setRingtone(ringtone.filename)" v-for="ringtone in ringtones" :class="[ current_ringtone === ringtone.filename ? 'is-active' : '']" class="list-item">
+		    {{ ringtone.name }}
+		  </li>
+		</ul>
+	    </div>
+	    <div class="modal" :class="[connected ? '' : 'is-active']">
+	      <div class="modal-background"></div>
+	      <div class="modal-content">
+		<div class="notification is-warning">
+		  <div class="field">Нет соединения с сервером! Попробуйте перезагрузить страницу.</div>
+		  <div class="field">
+		    <div class="control"><button class="button is-link" @click="window.location.reload()">Перезагрузить</button></div>
+		  </div>
+		</div>
+	      </div>
+	    </div>
+	</section>
+	
+
+    </body>
+</html>
