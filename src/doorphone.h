@@ -28,7 +28,7 @@ static  const char houston_ap_psk[] = "***"; // replace with real password
 /// default IP addresses, supposed to be replaced by
 // actual IP addresses assigned by Soft AP
 #define HOUSTON_IP     192,168,4,1
-#define GATECONTROL_IP 192,168,4,2
+#define GATECONTROL_IP 192,168,4,100
 
 // UDP message params
 #define MSG_RETRY_PERIOD 500

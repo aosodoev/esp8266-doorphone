@@ -1,4 +1,4 @@
 .pioenvs
-.piolibdeps
+.pio
 .clang_complete
 src/AP_credentials.h

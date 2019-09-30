@@ -1,11 +1,18 @@
 #include <SPI.h>
 
+#ifndef DISABLE_STA
 #include <ESP8266mDNS.h>
 #include <WiFiManager.h>
 #include <PubSubClient.h>
+#endif
+
+#ifdef ENABLE_WEB_GUI
+#include <web-ui.h>
+#include <ArduinoJSON.h>
+#endif
+
 #include <ArduinoOTA.h>
 #include <FS.h>
-
 
 #include <Adafruit_NeoPixel.h>
 
@@ -17,7 +24,12 @@
 #define CONNECT_BTN_PIN 4
 #define UNLOCK_BTN_PIN 5
 #define SPK_EN_PIN 16
+
+#ifdef PT8211
+#define LED_DATA_PIN 0
+#else
 #define LED_DATA_PIN 13
+#endif
 
 #define STATUS_LED 0
 #define SPK_EN LOW
@@ -25,22 +37,29 @@
 enum {MQTT_CMD_LOCK = 0, MQTT_CMD_KEYS_ADD, MQTT_CMD_KEYS_DELETE, MQTT_CMD_KEYS_LIST, MQTT_CMD_UNKNOWN};
 
 struct {
+#ifndef DISABLE_STA
   char mqtt_server[32] = "miniboxxy"; // mdns hostname in .local domain
+#endif
+  char ringtone[32] = "/bell.g722";
   uint8_t nkeys = 0;
   struct {
     uint8_t id[4];
-    char comment[32];
+    char comment[128];
     bool status;
   } keys[32];
 } settings;
 
+char unknown_key[16] = "FF:FF:FF:FF"; // TODO empty after debug complete
 
 Adafruit_NeoPixel leds = Adafruit_NeoPixel(1, LED_DATA_PIN, NEO_GRB + NEO_KHZ800);
 
 WiFiUDP udp;
 
 WiFiClient wlclient;
+
+#ifndef DISABLE_STA
 PubSubClient mqtt(wlclient);
+#endif
 
 IPAddress gatecontrol_ip = IPAddress(GATECONTROL_IP);
 IPAddress handset_ip = IPAddress(HOUSTON_IP);
@@ -50,7 +69,10 @@ static struct {
   int repeat_timeout;
 } outgoing_msgs[INTERCOM_MSG_NUM];
 
+// TODO switch to DISCONNECTED when debugging complete
 int status = HANDSET_STATUS_DISCONNECTED;
+// int status = HANDSET_STATUS_IDLE;
+
 
 uint32_t status_color[] = {
   [HANDSET_STATUS_NONE] = 0,
@@ -113,8 +135,12 @@ void readSettings() {
 	  }
 	  settings.keys[settings.nkeys++].status = true;
 	}
+#ifndef DISABLE_STA
       } else if (strcmp(key, "mqtt_server") == 0) {
         strcpy(settings.mqtt_server, value);
+#endif	
+      } else if (strcmp(key, "ringtone") == 0) {
+	strcpy(settings.ringtone, value);
       }
     }
     key = strtok(NULL, "\n\r");
@@ -133,7 +159,11 @@ void saveSettings() {
     return;
   }
   
+#ifndef DISABLE_STA  
   f.printf("mqtt_server=%s\n", settings.mqtt_server);
+#endif
+  
+  f.printf("ringtone=%s\n", settings.ringtone);
 
   for (int i = 0; i < settings.nkeys; i++) {
     if (settings.keys[i].status) {
@@ -150,7 +180,7 @@ void saveSettings() {
 }
 
 
-
+#ifndef DISABLE_STA
 IPAddress mdns_resolve(const char hostname[], const char service[], const char protocol[]) {
   int n = MDNS.queryService(service, protocol);
   for (int i = 0; i < n; i++) {
@@ -193,6 +223,8 @@ void mqtt_reconnect() {
 
 void mqtt_callback(const char topic[], byte* payload, unsigned int length);
 
+#endif
+
 
 void bell_begin() {
   ringer_repeat_timeout = 0;
@@ -213,6 +245,7 @@ void voice_begin(bool mute = false) {
   DPRINTF("Voice communication begin.");
   bell_end();
   audio_streaming_begin(UDPSTREAM);
+  // audio_streaming_begin("/success.g722");
   status = HANDSET_STATUS_VOICE_MUTE;
   if (!mute) {
     audio_sampling_begin(gatecontrol_ip);
@@ -239,6 +272,102 @@ int key_index(uint8_t id[4]) {
   }
   return -1;
 }
+
+bool add_key(const char *key) {
+  uint8_t id[4];
+  int id_int[4];
+  if (sscanf(key, "%x:%x:%x:%x;%s",
+	     &id_int[0], &id_int[1], &id_int[2], &id_int[3], settings.keys[settings.nkeys].comment) == 5) {
+    for (int i=0; i<4; i++) {
+      id[i] = id_int[i];
+    }
+    DPRINTF("New key: %s, unknown key: %s, length: %d", key, unknown_key, strchr(key, ';') - key);
+    if (key_index(id) != -1) {
+      DPRINTF("Key already known.");
+    } else {
+      if (strncmp(unknown_key, key, strchr(key, ';') - key) == 0) {
+	unknown_key[0] = 0;
+      }
+      memcpy(settings.keys[settings.nkeys].id, id, 4);
+      settings.keys[settings.nkeys++].status = true;
+      DPRINTF("Added key: %02X:%02X:%02X:%02X", id_int[0], id_int[1], id_int[2], id_int[3]);
+      saveSettings();
+      outgoing_msgs[INTERCOM_MSG_KEYRING].retry = MSG_RETRY_COUNT;
+      return true;
+    }
+  } else {
+    DPRINTF("Error parsing key.");
+  }
+  return false;
+}
+
+bool delete_key(const char *key) {
+  int index;
+  uint8_t id[4];
+  int id_int[4]; 
+  if (sscanf(key, "%x:%x:%x:%x",
+	     &id_int[0], &id_int[1], &id_int[2], &id_int[3]) == 4) {
+    for (int i=0; i<4; i++) {
+      id[i] = id_int[i];
+    }
+    index = key_index(id);
+    if (index != -1) {
+      settings.keys[index].status = false;
+      saveSettings();
+      readSettings();
+      outgoing_msgs[INTERCOM_MSG_KEYRING].retry = MSG_RETRY_COUNT;
+      return true;
+    } else {
+      DPRINTF("Key id not found.");
+    }
+  } else {
+    DPRINTF("Error parsing key.");
+  }
+  return false;
+}
+
+void set_ringtone(const char *ringtone) {
+  strcpy(settings.ringtone + 1, ringtone);
+  saveSettings();
+  audio_streaming_end();
+  audio_streaming_begin(settings.ringtone);
+}
+
+#ifdef ENABLE_WEB_GUI
+
+char* settings_json() {
+  char *response;
+  
+  const size_t capacity = JSON_ARRAY_SIZE(32) + 32*JSON_OBJECT_SIZE(2) + JSON_OBJECT_SIZE(3);
+  DynamicJsonDocument doc(capacity);
+
+  doc["ringtone"] = settings.ringtone + 1;
+  doc["unknown_key"] = unknown_key;
+
+  JsonArray keys = doc.createNestedArray("keys");
+  for (int i = 0; i < settings.nkeys; i++) {
+    JsonObject key = keys.createNestedObject();
+    char string_id[] = "FF:FF:FF:FF";
+    uint8_t *id = settings.keys[i].id;
+    sprintf(string_id, "%X:%X:%X:%X", id[0], id[1], id[2], id[3]);
+    key["guid"] = string_id;
+    key["comment"] = settings.keys[i].comment;
+  }
+
+  size_t outputSize = measureJson(doc) + 1;
+  
+  response = new char[outputSize];
+
+  serializeJson(doc, response, outputSize);
+
+  DPRINTF("heap: %d", ESP.getFreeHeap());
+  
+  return response;
+}
+
+#endif
+
+#ifndef DISABLE_STA
 
 void mqtt_callback(const char topic[], byte* payload, unsigned int length) {
   char
@@ -268,44 +397,11 @@ void mqtt_callback(const char topic[], byte* payload, unsigned int length) {
       break;
 
     case MQTT_CMD_KEYS_ADD:
-      if (sscanf(msg, "%x:%x:%x:%x;%s",
-		 &id_int[0], &id_int[1], &id_int[2], &id_int[3], settings.keys[settings.nkeys].comment) == 5) {
-	for (int i=0; i<4; i++) {
-	  id[i] = id_int[i];
-	}
-	if (key_index(id) != -1) {
-	  DPRINTF("Key already known.");
-	} else {
-	  memcpy(settings.keys[settings.nkeys].id, id, 4);
-	  settings.keys[settings.nkeys++].status = true;
-	  DPRINTF("Added key: %02X:%02X:%02X:%02X", id_int[0], id_int[1], id_int[2], id_int[3]);
-	  saveSettings();
-	  outgoing_msgs[INTERCOM_MSG_KEYRING].retry = MSG_RETRY_COUNT;
-	}
-      } else {
-	DPRINTF("Error parsing key.");
-      }
+      add_key(msg);
       break;
 
     case MQTT_CMD_KEYS_DELETE:
-      int index;
-      if (sscanf(msg, "%x:%x:%x:%x",
-		 &id_int[0], &id_int[1], &id_int[2], &id_int[3]) == 4) {
-	for (int i=0; i<4; i++) {
-	  id[i] = id_int[i];
-	}
-	index = key_index(id);
-	if (index != -1) {
-	  settings.keys[index].status = false;
-	  saveSettings();
-	  readSettings();
-	  outgoing_msgs[INTERCOM_MSG_KEYRING].retry = MSG_RETRY_COUNT;
-	} else {
-	  DPRINTF("Key id not found.");
-	}
-      } else {
-	DPRINTF("Error parsing key.");
-      }
+      delete_key(msg);
       break;
 
     case MQTT_CMD_KEYS_LIST:
@@ -331,6 +427,8 @@ void mqtt_callback(const char topic[], byte* payload, unsigned int length) {
   delete [] msg;
 }
 
+#endif
+
 void confirm_msg(IPAddress ip, int msg) {
   udp.beginPacket(ip, CONTROL_PORT);
   udp.write(INTERCOM_MSG_OK);
@@ -341,10 +439,12 @@ void confirm_msg(IPAddress ip, int msg) {
 
 void udp_listen_loop() {
 
-  static unsigned long
-    connectionTimeout = 0,
-    wifiReconnectTimeout = 0;
+  static unsigned long connectionTimeout = 0;
 
+#ifndef DISABLE_STA
+
+  static uint32_t wifiReconnectTimeout = 0;
+  
   if (WiFi.status() != WL_CONNECTED) {
     if (millis() - wifiReconnectTimeout > 30000) {
       DPRINTF("WiFi connection lost (status = %d), reconnecting...", WiFi.status());
@@ -355,6 +455,8 @@ void udp_listen_loop() {
     status = HANDSET_STATUS_DISCONNECTED;
     return;
   }
+
+#endif
   
   int bytes = udp.parsePacket();
   if (bytes) {
@@ -378,9 +480,15 @@ void udp_listen_loop() {
       case INTERCOM_MSG_UNKNOWN_KEY:
 	uint8_t id[4];
 	udp.read(id, 4);
+#ifndef DISABLE_STA
 	char status_update[64];
 	sprintf(status_update, "### Unknown key\nid: %X:%X:%X:%X", id[0], id[1], id[2], id[3]);
 	mqtt.publish("yard/gates/status", status_update, false);
+#endif
+#ifdef ENABLE_WEB_GUI
+	sprintf(unknown_key, "%X:%X:%X:%X", id[0], id[1], id[2], id[3]);
+	broadcastSettings();
+#endif
 	confirm_msg(udp.remoteIP(), msg);
 	break;
 
@@ -389,14 +497,20 @@ void udp_listen_loop() {
 	switch (msg_ok) {
 	case INTERCOM_MSG_PING:
 	  break;
+	  
 	case INTERCOM_MSG_UNLOCK:
+	  
+#ifndef DISABLE_STA
 	  mqtt.publish("yard/gates/lock/status", "UNLOCK");
 	  mqtt_unlock_published = millis();
+#endif
 	  // TODO process unlock with some confirmation sound or whatever
 	  break;
+	  
 	case INTERCOM_MSG_HANGUP:
 	  // TODO process hangup
 	  break;
+	  
 	case INTERCOM_MSG_CONNECT:
 	  // TODO start voice
 	  break;
@@ -410,6 +524,7 @@ void udp_listen_loop() {
   }
   
   // connection timeout
+  // TODO uncomment when debugging complete
   if (status != HANDSET_STATUS_DISCONNECTED && (millis() - connectionTimeout > 5000)) {
     status = HANDSET_STATUS_DISCONNECTED;
     DPRINTF("Gate control disconnected.");
@@ -452,11 +567,13 @@ void setup() {
 
   if (!SPIFFS.begin()) {
     DPRINTF("SPIFFS.begin() failed");
-    return;
+    // return;
   } else {
     readSettings();
   }
 
+  
+#ifndef DISABLE_STA  
   WiFiManager wifiManager;
   // WifiManager.resetSettings(); // reset saved SSID and password
 
@@ -470,6 +587,9 @@ void setup() {
   }
   
   WiFi.mode(WIFI_AP_STA);
+#else
+  WiFi.mode(WIFI_AP);
+#endif
 
   WiFi.setSleepMode(WIFI_NONE_SLEEP);
   WiFi.setAutoConnect(false);
@@ -478,12 +598,24 @@ void setup() {
   // WiFi.setOutputPower(20.5);
   WiFi.softAP(houston_ap_ssid, houston_ap_psk, WiFi.channel(), SOFT_AP_HIDDEN);
 
+#ifdef DISABLE_STA
+  WiFi.enableAP(true);
+  DPRINTF("SSID: %s, PSK: %s", houston_ap_ssid, houston_ap_psk);
+#else
   WiFi.reconnect();
+  DPRINTF("SSID: %s, PSK: %s", houston_ap_ssid, houston_ap_psk);
+#endif
   
   ArduinoOTA.setHostname("houston");
   ArduinoOTA.begin();
-  
+
+#ifndef DISABLE_STA  
   mqtt.setCallback(mqtt_callback);
+#endif
+
+#ifdef ENABLE_WEB_GUI
+  setupWebUI();
+#endif
 
   udp.begin(CONTROL_PORT);
 
@@ -505,6 +637,8 @@ void setup() {
 
   leds.begin();
 
+  audio_streaming_begin("/success.g722");
+
 }
 
 void loop() {
@@ -521,7 +655,7 @@ void loop() {
     conn_btn_debounce = millis();
     last_conn_btn_state = reading;
   }
-    
+  
   if (reading != conn_btn_state && millis() - conn_btn_debounce > 50) {
     conn_btn_state = reading;
     if (conn_btn_state == LOW) {
@@ -573,7 +707,7 @@ void loop() {
   }
 
   if (status == HANDSET_STATUS_RINGING && (ringer_repeat_timeout == 0 || millis() - ringer_repeat_timeout >= 5000)) {
-    audio_streaming_begin("/bell.g722");
+    audio_streaming_begin(settings.ringtone);
     ringer_repeat_timeout = millis();
   }
   
@@ -582,6 +716,14 @@ void loop() {
     ArduinoOTA.handle();
   }
 
+#ifdef ENABLE_WEB_GUI
+  if (!audio_sampling()) {
+    loopWebUI();
+  }
+#endif
+
+
+#ifndef DISABLE_STA
   // poll mqtt every once in a while as it's quite slow
   static unsigned long mqttLastLoop = 0;
   if (millis() - mqttLastLoop >= 400) {
@@ -595,7 +737,8 @@ void loop() {
       }
     }
   }
-
+#endif
+  
   static int previous_status = HANDSET_STATUS_NONE;
   static unsigned long status_led_update_timeout = 0;
   if (previous_status != status || millis() - status_led_update_timeout >= 1000) {
