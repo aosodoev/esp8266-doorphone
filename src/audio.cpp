@@ -9,9 +9,13 @@ extern "C" {
 
 }
 
-#include <Wire.h>
 #include <SPI.h>
+
+#ifndef PT8211
 #include "lltwi.h"
+#include <Wire.h>
+#endif
+
 #include "doorphone.h"
 #include "audio.h"
 
@@ -20,6 +24,7 @@ extern "C" {
 #define SAMPLE_BUFFERS 4
 #define SAMPLE_BUFFER_LEN 1024
 #define ADC_SAMPLE_BUFFER_LEN 256
+#define ADC_CS 15
 
 typedef struct {
   int16_t samples[SAMPLE_BUFFER_LEN];
@@ -48,7 +53,7 @@ struct {
   volatile size_t adc_wbuf = 0;
   volatile size_t adc_bufpos = 0;
   volatile bool adc_buf_ready = 0;
-  
+
 } g722stream;
 
 static g722_decode_state *g722_dec_state;
@@ -61,6 +66,7 @@ void audio_buffer_write(sample_buffer *buffer, size_t bytes, byte *data) {
   g722stream.wbuf = (g722stream.wbuf + 1) % SAMPLE_BUFFERS;
   if (g722stream.wbuf == 2 && !g722stream.output) {
     g722stream.output = true;
+    DPRINTF("Starting Audio Output!");
   }
 }
 
@@ -87,7 +93,7 @@ void audio_buffer_loop() {
 	g722stream.f.close();
 	g722stream.eof = true;
 	DPRINTF("Reached end of file");
-      }
+      }	   
     }
 
     if (g722stream.bytes > 0) {
@@ -118,6 +124,7 @@ void audio_buffer_init() {
   g722stream.eof = false;
 }
 
+#ifndef PT8211
 
 static inline uint8_t write_dac(uint16_t value) {
   /* value is 76543210 XXXXBA98
@@ -130,24 +137,21 @@ static inline uint8_t write_dac(uint16_t value) {
   return ret;
 }
 
+#endif
+
 void ICACHE_RAM_ATTR audio_isr() {
 
   int16_t sample, sampleOutput = 0;
-  
-  // Read a sample from ADC
-  if (g722stream.sampling) {
-    // digitalWrite(ADC_CS, LOW);
-    while(SPI1CMD & SPIBUSY) {}
-    SPI1W0 = 0;
-    SPI1CMD |= SPIBUSY;
-  }
 
-  if (g722stream.output) {  
+  static uint32_t next = ESP.getCycleCount();
+  
+#ifdef PT8211
+
+  if (g722stream.output) {
     sample_buffer *buffer = &g722stream.buffer[g722stream.rbuf];
 
     if (buffer->len) {
       sampleOutput = buffer->samples[buffer->pos++];
-      write_dac(((uint16_t)sampleOutput ^ 32768) >> 4);
       if (buffer->pos == buffer->len) {
 	buffer->pos = 0;
 	buffer->len = 0;
@@ -158,8 +162,13 @@ void ICACHE_RAM_ATTR audio_isr() {
     }
   }
 
+  if (g722stream.sampling || g722stream.output) {
+    // while(SPI1CMD & SPIBUSY) {}
+    digitalWrite(ADC_CS, HIGH);
+  }
+  
+  // read a sample from ADC
   if (g722stream.sampling) {  
-    while(SPI1CMD & SPIBUSY) {}
 #ifdef ADC8BIT
     sample = (SPI1W0 << 8) ^ 32768;
 #else
@@ -181,6 +190,72 @@ void ICACHE_RAM_ATTR audio_isr() {
     }
   }
 
+  // Initiate next SPI transfer
+  if (g722stream.sampling || g722stream.output) {
+    digitalWrite(ADC_CS, LOW);
+    SPI1W0 = sampleOutput << 8 | sampleOutput >> 8;
+    SPI1CMD |= SPIBUSY;
+  }
+  
+#else
+
+  if (g722stream.sampling) {  
+    while(SPI1CMD & SPIBUSY) {}
+    digitalWrite(ADC_CS, HIGH);
+#ifdef ADC8BIT
+    sample = (SPI1W0 << 8) ^ 32768;
+#else
+    uint16_t result = SPI1W0 & 0xFFFF;
+    result = (((result >> 8) | (result << 8)) >> 1) & 0xFFF;
+    sample = (result << 4) ^ 32768;
+#endif
+    // window[idx & 3] = sample;
+    // sample = (window[0] + window[1] + window[2] + window[3]) / 4;
+    // idx++;
+    
+    // If the buffer is full, signal it's ready to be sent and switch to the other one
+    g722stream.adc_buf[g722stream.adc_wbuf][g722stream.adc_bufpos++] = sample;
+    if (g722stream.adc_bufpos == ADC_SAMPLE_BUFFER_LEN) {
+      g722stream.adc_bufpos = 0;
+      g722stream.adc_wbuf = !g722stream.adc_wbuf;
+      g722stream.adc_buf_ready = 1;
+    }
+  }
+
+  if (g722stream.output) {
+    sample_buffer *buffer = &g722stream.buffer[g722stream.rbuf];
+
+    if (buffer->len) {
+      sampleOutput = buffer->samples[buffer->pos++];
+      write_dac(((uint16_t)sampleOutput ^ 32768) >> 4);
+      if (buffer->pos == buffer->len) {
+	buffer->pos = 0;
+	buffer->len = 0;
+	g722stream.rbuf = (g722stream.rbuf + 1) % SAMPLE_BUFFERS;
+      }
+    } else if (g722stream.eof) {
+      audio_streaming_end();
+    }
+  }
+
+  // Start reading a new sample from ADC
+  if (g722stream.sampling) {
+    // while(SPI1CMD & SPIBUSY) {}
+    digitalWrite(ADC_CS, LOW);
+    SPI1W0 = 0;
+    SPI1CMD |= SPIBUSY;
+  }
+
+
+#endif
+
+  next += F_CPU / 16000L;
+  if (next <= ESP.getCycleCount()) {
+    next = ESP.getCycleCount() + F_CPU / 16000L;
+  }
+
+  timer0_write(next);
+  
 }
 
 void audio_output_begin() {
@@ -191,6 +266,9 @@ void audio_output_end() {
   g722stream.output = false;
 }
 
+void audio_SPI_begin();
+void audio_SPI_end();
+
 // fname = "UDP" to start streaming from UDP port
 void audio_streaming_begin(const char *fname) {
   
@@ -199,6 +277,13 @@ void audio_streaming_begin(const char *fname) {
 
   audio_buffer_init();
   g722stream.output = false;
+
+
+#ifdef PT8211
+  if (!audio_sampling()) {
+    audio_SPI_begin();
+  }
+#endif
 
   // if (strcmp(fname, UDPSTREAM) == 0) {
   if (fname == UDPSTREAM) {
@@ -216,7 +301,7 @@ void audio_streaming_begin(const char *fname) {
       g722stream.playing = g722stream.STREAMING_FILE;
     }
   }
-  audio_output_begin();
+  // audio_output_begin();
 }
 
 void audio_streaming_end() {
@@ -229,6 +314,13 @@ void audio_streaming_end() {
     }
     g722stream.playing = g722stream.STREAMING_NONE;
     audio_output_end();
+
+#ifdef PT8211
+    if (!g722stream.sampling) {
+      audio_SPI_end();
+    }
+#endif
+
     DPRINTF("Audio stopped");
   }
 }
@@ -238,12 +330,24 @@ void audio_init() {
   g722_enc_state = g722_encoder_new(64000, 0);
   g722_dec_state = g722_decoder_new(64000, 0);
   // g722_decoder_init(&g722_dec_state, 64000, 0);
-
+  
+#ifndef PT8211
   Wire.begin(LLTWI_SDA, LLTWI_SCL);
-  timer1_isr_init();
-  timer1_attachInterrupt(audio_isr);
-  timer1_enable(TIM_DIV1, TIM_EDGE, TIM_LOOP);
-  timer1_write(5000); // 3628 = 22050, 5000 = 16000
+#endif
+
+  pinMode(ADC_CS, OUTPUT);
+  digitalWrite(ADC_CS, HIGH);
+
+  noInterrupts();
+  timer0_isr_init();
+  timer0_attachInterrupt(audio_isr);
+  timer0_write(ESP.getCycleCount() + F_CPU/16000);
+  interrupts();
+  
+  // timer1_isr_init();
+  // timer1_attachInterrupt(audio_isr);
+  // timer1_enable(TIM_DIV1, TIM_EDGE, TIM_LOOP);
+  // timer1_write(5000); // 3628 = 22050, 5000 = 16000
 }
 
 inline void SPI_setDataBits(uint16_t bits) {
@@ -252,20 +356,61 @@ inline void SPI_setDataBits(uint16_t bits) {
   SPI1U1 = ((SPI1U1 & mask) | ((bits << SPILMOSI) | (bits << SPILMISO)));
 }
 
+void audio_SPI_begin() {
+
+
+#ifdef ADC8BIT
+  SPI.beginTransaction(SPISettings(2000000L, MSBFIRST, SPI_MODE0));
+  // SPI.setClockDivider(SPI_CLOCK_DIV8);
+  // SPI.setClockDivider(SPI_CLOCK_DIV16);
+  SPI.setHwCs(false);
+  SPI_setDataBits(8);
+#else
+  SPI.beginTransaction(SPISettings(20000000L, MSBFIRST, SPI_MODE0));
+  SPI.setHwCs(false);
+  SPI.write16(0); // set data bits 16
+#endif
+
+
+  DPRINTF("Audio SPI begin!");
+
+  return;
+  
+  SPI.setDataMode(SPI_MODE0);
+  SPI.setBitOrder(MSBFIRST);
+#ifdef ADC8BIT
+  SPI.setClockDivider(SPI_CLOCK_DIV8);
+  // SPI.setClockDivider(SPI_CLOCK_DIV16);
+  SPI_setDataBits(8);
+#else
+  SPI.setClockDivider(SPI_CLOCK_DIV4);
+  SPI_setDataBits(16);
+#endif
+  SPI.setHwCs(false);
+  pinMode(ADC_CS, OUTPUT);
+  digitalWrite(ADC_CS, HIGH);
+
+}
+
+void audio_SPI_end() {
+  SPI.endTransaction();
+  return;
+  SPI.setClockDivider(SPI_CLOCK_DIV4);
+  SPI.setHwCs(false);
+}
+
+
 void audio_sampling_begin(IPAddress dest) {
   if (!g722stream.sampling) {
-    SPI.setDataMode(SPI_MODE0);
-    SPI.setBitOrder(MSBFIRST);
-#ifdef ADC8BIT
-    SPI.setClockDivider(SPI_CLOCK_DIV8);
-    // SPI.setClockDivider(SPI_CLOCK_DIV16);
-    SPI_setDataBits(8);
-#else
-    SPI.setClockDivider(SPI_CLOCK_DIV4);
-    SPI_setDataBits(16);
-#endif
-    SPI.setHwCs(true);
 
+#ifdef PT8211
+    if (!audio_playing()) {
+      audio_SPI_begin();
+    }
+#else
+    audio_SPI_begin();
+#endif
+    
     g722stream.dest = dest;
     g722stream.sampling = true;
 
@@ -276,8 +421,13 @@ void audio_sampling_begin(IPAddress dest) {
 void audio_sampling_end() {
   if (g722stream.sampling) {
     g722stream.sampling = false;
-    SPI.setClockDivider(SPI_CLOCK_DIV4);
-    SPI.setHwCs(false);
+#ifdef PT8211
+    if (!audio_playing()) {
+      audio_SPI_end();
+    }
+#else
+    audio_SPI_end();
+#endif
   }
 }
 
