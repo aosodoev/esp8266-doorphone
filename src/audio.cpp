@@ -1,12 +1,10 @@
 #include <FS.h>
 
 extern "C" {
-
 #include <g722.h>
 #include <g722_private.h>
 #include <g722_decoder.h>
 #include <g722_encoder.h>
-
 }
 
 #include <SPI.h>
@@ -343,11 +341,7 @@ void audio_init() {
   timer0_attachInterrupt(audio_isr);
   timer0_write(ESP.getCycleCount() + F_CPU/16000);
   interrupts();
-  
-  // timer1_isr_init();
-  // timer1_attachInterrupt(audio_isr);
-  // timer1_enable(TIM_DIV1, TIM_EDGE, TIM_LOOP);
-  // timer1_write(5000); // 3628 = 22050, 5000 = 16000
+
 }
 
 inline void SPI_setDataBits(uint16_t bits) {
@@ -366,37 +360,18 @@ void audio_SPI_begin() {
   SPI.setHwCs(false);
   SPI_setDataBits(8);
 #else
-  SPI.beginTransaction(SPISettings(20000000L, MSBFIRST, SPI_MODE0));
+  SPI.beginTransaction(SPISettings(2000000L, MSBFIRST, SPI_MODE0));
   SPI.setHwCs(false);
   SPI.write16(0); // set data bits 16
 #endif
 
-
   DPRINTF("Audio SPI begin!");
-
-  return;
-  
-  SPI.setDataMode(SPI_MODE0);
-  SPI.setBitOrder(MSBFIRST);
-#ifdef ADC8BIT
-  SPI.setClockDivider(SPI_CLOCK_DIV8);
-  // SPI.setClockDivider(SPI_CLOCK_DIV16);
-  SPI_setDataBits(8);
-#else
-  SPI.setClockDivider(SPI_CLOCK_DIV4);
-  SPI_setDataBits(16);
-#endif
-  SPI.setHwCs(false);
-  pinMode(ADC_CS, OUTPUT);
-  digitalWrite(ADC_CS, HIGH);
 
 }
 
 void audio_SPI_end() {
   SPI.endTransaction();
-  return;
-  SPI.setClockDivider(SPI_CLOCK_DIV4);
-  SPI.setHwCs(false);
+  digitalWrite(ADC_CS, HIGH);
 }
 
 
