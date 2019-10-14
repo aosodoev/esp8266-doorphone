@@ -1,5 +1,8 @@
 #include <SPI.h>
 
+
+// #define AUDIO_DEBUG
+
 #ifndef DISABLE_STA
 #include <ESP8266mDNS.h>
 #include <WiFiManager.h>
@@ -9,6 +12,7 @@
 #ifdef ENABLE_WEB_GUI
 #include <web-ui.h>
 #include <ArduinoJSON.h>
+#include <Ticker.h>
 #endif
 
 #include <ArduinoOTA.h>
@@ -24,6 +28,10 @@
 #define CONNECT_BTN_PIN 4
 #define UNLOCK_BTN_PIN 5
 #define SPK_EN_PIN 16
+
+#ifndef CONNECT_BTN_ACTIVE
+#define CONNECT_BTN_ACTIVE LOW
+#endif
 
 #ifdef PT8211
 #define LED_DATA_PIN 0
@@ -49,7 +57,11 @@ struct {
   } keys[32];
 } settings;
 
-char unknown_key[16] = "FF:FF:FF:FF"; // TODO empty after debug complete
+#ifdef DEBUG
+char unknown_key[16] = "FF:FF:FF:FF";
+#else
+char unknown_key[16] = "";
+#endif
 
 Adafruit_NeoPixel leds = Adafruit_NeoPixel(1, LED_DATA_PIN, NEO_GRB + NEO_KHZ800);
 
@@ -69,10 +81,12 @@ static struct {
   int repeat_timeout;
 } outgoing_msgs[INTERCOM_MSG_NUM];
 
-// TODO switch to DISCONNECTED when debugging complete
-int status = HANDSET_STATUS_DISCONNECTED;
-// int status = HANDSET_STATUS_IDLE;
 
+#ifdef AUDIO_DEBUG
+int status = HANDSET_STATUS_IDLE;
+#else
+int status = HANDSET_STATUS_DISCONNECTED;
+#endif
 
 uint32_t status_color[] = {
   [HANDSET_STATUS_NONE] = 0,
@@ -326,14 +340,20 @@ bool delete_key(const char *key) {
   return false;
 }
 
-void set_ringtone(const char *ringtone) {
-  strcpy(settings.ringtone + 1, ringtone);
-  saveSettings();
-  audio_streaming_end();
-  audio_streaming_begin(settings.ringtone);
-}
 
 #ifdef ENABLE_WEB_GUI
+
+
+void set_ringtone(const char *ringtone) {
+  static Ticker ticker;
+  strcpy(settings.ringtone + 1, ringtone);
+  saveSettings();
+  bell_end();
+  bell_begin();
+  ticker.once(5, bell_end);
+  // audio_streaming_end();
+  // audio_streaming_begin(settings.ringtone);
+}
 
 char* settings_json() {
   char *response;
@@ -522,13 +542,14 @@ void udp_listen_loop() {
     connectionTimeout = millis();
 
   }
-  
+
+#ifndef AUDIO_DEBUG
   // connection timeout
-  // TODO uncomment when debugging complete
   if (status != HANDSET_STATUS_DISCONNECTED && (millis() - connectionTimeout > 5000)) {
     status = HANDSET_STATUS_DISCONNECTED;
     DPRINTF("Gate control disconnected.");
   }
+#endif
 
   for (int omsg = 0; omsg < INTERCOM_MSG_NUM; omsg++) {
     if (outgoing_msgs[omsg].retry && (outgoing_msgs[omsg].repeat_timeout == 0 || millis() - outgoing_msgs[omsg].repeat_timeout > MSG_RETRY_PERIOD)) {
@@ -644,7 +665,7 @@ void setup() {
 void loop() {
 
   static unsigned long conn_btn_debounce = 0, unlock_btn_debounce;
-  static bool conn_btn_state = HIGH, last_conn_btn_state = HIGH,
+  static bool conn_btn_state = !CONNECT_BTN_ACTIVE, last_conn_btn_state = !CONNECT_BTN_ACTIVE,
     unlock_btn_state = HIGH, last_unlock_btn_state = HIGH;
 
   static int btn_down_status;
@@ -658,7 +679,7 @@ void loop() {
   
   if (reading != conn_btn_state && millis() - conn_btn_debounce > 50) {
     conn_btn_state = reading;
-    if (conn_btn_state == LOW) {
+    if (conn_btn_state == CONNECT_BTN_ACTIVE) {
       // connect/hangup button pressed
       if (status == HANDSET_STATUS_DISCONNECTED) { // no connection to gatecontrol unit
 	bell_end();
@@ -686,7 +707,9 @@ void loop() {
   if (reading != unlock_btn_state && millis() - unlock_btn_debounce > 50) {
     unlock_btn_state = reading;
     if (unlock_btn_state == LOW) {
-      bell_end();
+      if (status == HANDSET_STATUS_RINGING) {
+	bell_end();
+      }
       if (status == HANDSET_STATUS_DISCONNECTED) {
 	audio_streaming_begin("/error.g722");
       } else {
@@ -741,10 +764,18 @@ void loop() {
   
   static int previous_status = HANDSET_STATUS_NONE;
   static unsigned long status_led_update_timeout = 0;
-  if (previous_status != status || millis() - status_led_update_timeout >= 1000) {
+  static bool blink;
+  if (status == HANDSET_STATUS_IDLE || previous_status != status || millis() - status_led_update_timeout >= 1000) {
     previous_status = status;
     status_led_update_timeout = millis();
-    leds.setPixelColor(0, status_color[status]);
+    uint32_t ledColor;
+    if (status == HANDSET_STATUS_IDLE) {
+      ledColor = leds.Color(0, map(leds.sine8(millis() >> 4), 0, 255, 1, 12), 0);
+    } else {
+      blink = !blink;
+      ledColor = (status == HANDSET_STATUS_RINGING && blink) ? 0 : status_color[status];
+    }
+    leds.setPixelColor(0, ledColor);
     leds.show();
   }
 
