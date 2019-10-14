@@ -4,10 +4,14 @@
 
 #include <WebSocketsServer.h>
 #include <ESP8266WebServer.h>
+#include <DNSServer.h>
 #include <FS.h>
 
 ESP8266WebServer server(80);
+DNSServer        dnsServer;
 WebSocketsServer webSocket(81);
+
+const uint8_t DNS_PORT = 53;
 
 void handleNotFound();
 void webSocketEvent(uint8_t num, WStype_t type, uint8_t * payload, size_t length);
@@ -22,9 +26,13 @@ void setupWebUI() {
                                               // and check if the file exists
   server.begin();                             // start the HTTP server
   DPRINTF("HTTP server started.");
+
+  dnsServer.setErrorReplyCode(DNSReplyCode::NoError);
+  dnsServer.start(DNS_PORT, "*", WiFi.softAPIP());
 }
 
 void loopWebUI() {
+  dnsServer.processNextRequest();
   webSocket.loop();
   server.handleClient();
 }
