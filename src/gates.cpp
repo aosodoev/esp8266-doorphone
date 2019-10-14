@@ -2,7 +2,7 @@
 
 #include <SPI.h>
 
-#define MFRC522_SPICLOCK SPI_CLOCK_DIV32
+#define MFRC522_SPICLOCK SPI_CLOCK_DIV4
 #include <MFRC522.h>
 
 #include <WiFiManager.h>
@@ -19,12 +19,13 @@ WiFiUDP udp;
 #define MFRC_SS_PIN       16 // Configurable, see typical pin layout above
 #define LOCK_CONTROL_PIN  5
 
-#define MFRC_MAX_GAIN
+// #define MFRC_MAX_GAIN
 
 unsigned long voice_started = 0,
   unlockPulseTimeout = 0;
 
 bool connected = false;
+bool card_reader_is_shutdown = false;
 
 IPAddress houston_ip = IPAddress(HOUSTON_IP);
 
@@ -40,23 +41,34 @@ static struct {
 MFRC522 mfrc522(MFRC_SS_PIN, MFRC_RST_PIN);  // Create MFRC522 instance
 
 void card_reader_init() {
-  //SPI.setClockDivider(SPI_CLOCK_DIV8);
-  SPI.setHwCs(false);
-  pinMode(ADC_CS, OUTPUT);
-  digitalWrite(ADC_CS, HIGH);
-
   DPRINTF("MFRC522_SPICLOCK = %d, SPI_CLOCK_DIV16 = %d", MFRC522_SPICLOCK, SPI_CLOCK_DIV16);
 
-  mfrc522.PCD_Init();
+  pinMode(MFRC_RST_PIN, INPUT_PULLUP);
+  
+  if (digitalRead(MFRC_RST_PIN) == HIGH) {
+    mfrc522.PCD_Init();
 
 #ifdef MFRC_MAX_GAIN
-  mfrc522.PCD_AntennaOff();
-  mfrc522.PCD_SetAntennaGain(MFRC522::RxGain_max); // RxGain_38dB RxGain_43dB RxGain_max
-  mfrc522.PCD_AntennaOn();
+    mfrc522.PCD_AntennaOff();
+    mfrc522.PCD_SetAntennaGain(MFRC522::RxGain_max); // RxGain_38dB RxGain_43dB RxGain_max
+    mfrc522.PCD_AntennaOn();
 #endif
+    pinMode(MFRC_RST_PIN, INPUT_PULLUP);
+  }
 
-  pinMode(MFRC_RST_PIN, INPUT_PULLUP);
 }
+
+void card_reader_shutdown() {
+  pinMode(MFRC_RST_PIN, OUTPUT);
+  digitalWrite(MFRC_RST_PIN, LOW); // turn off RFID reader, it messes up MISO
+}
+
+void audio_play(const char *filename) {
+  card_reader_shutdown();
+  card_reader_is_shutdown = true;
+  audio_streaming_begin(filename);
+}
+
 
 int key_index(uint8_t id[4]) {
   for (int i = 0; i < nkeys; i++) {
@@ -103,13 +115,17 @@ void doorUnlock() {
   digitalWrite(LOCK_CONTROL_PIN, LOW);
   unlockPulseTimeout = millis();
 
-  audio_streaming_begin("/success.low.g722");
+#ifdef UNIT16  
+  audio_play("/success.g722");
+#else
+  audio_play("/success.low.g722");
+#endif
 }
 
 void voice_begin(IPAddress handset_ip) {
 
-  pinMode(MFRC_RST_PIN, OUTPUT);
-  digitalWrite(MFRC_RST_PIN, LOW); // turn off RFID reader, it messes up MISO
+  card_reader_shutdown();
+
   audio_streaming_end(); // in case bell sound is still playing
   audio_streaming_begin(UDPSTREAM);
   audio_sampling_begin(handset_ip);
@@ -171,7 +187,11 @@ void card_scan_loop() {
     // queue unknown key message
     memcpy(unknown_key, readCard, 4);
     outgoing_msgs[INTERCOM_MSG_UNKNOWN_KEY].retry = MSG_RETRY_COUNT;
-    audio_streaming_begin("/error.low.g722");
+#ifdef UNIT16
+    audio_play("/error.g722");
+#else
+    audio_play("/error.low.g722");
+#endif
   }
 }
 
@@ -320,7 +340,10 @@ void setup() {
   ArduinoOTA.begin();
 
   SPI.begin();
-  card_reader_init();
+  
+  audio_init();
+  
+  // card_reader_init();
 
   udp.begin(CONTROL_PORT);
   for (int i = 0; i < INTERCOM_MSG_NUM; i++) {
@@ -328,25 +351,30 @@ void setup() {
     outgoing_msgs[i].repeat_timeout = 0;
   }
 
-  audio_init();
-
 }
 
 void loop() {
 
   static unsigned long debounce = 0;
-  static bool buttonState = HIGH, lastButtonState = HIGH;
+  static bool buttonState = LOW, lastButtonState = LOW;
 
   // handle lock pulse timeout
   if (digitalRead(LOCK_CONTROL_PIN) == LOW && (millis() - unlockPulseTimeout > 100)) {
     digitalWrite(LOCK_CONTROL_PIN, HIGH);
   }
 
+
+  // reinit card reader if it was disabled for audio playback
+  if (card_reader_is_shutdown && !audio_playing()) {
+    card_reader_init();
+    card_reader_is_shutdown = false;
+  }
+
   // Door bell button status
   bool reading;
 
   // only when we are not talking (coz shared pin)
-  if (!audio_sampling()) {
+  if (!audio_sampling() && !audio_playing()) {
     reading = digitalRead(MFRC_RST_PIN);
   } else {
     reading = lastButtonState;
@@ -363,9 +391,17 @@ void loop() {
       // doorbell button pressed, send signal
       if (connected) {
 	outgoing_msgs[INTERCOM_MSG_BELL].retry = MSG_RETRY_COUNT;
-	audio_streaming_begin("/bell.low.g722");
+#ifdef UNIT16
+	audio_play("/bell.g722");
+#else
+	audio_play("/bell.low.g722");
+#endif	
       } else {
-	audio_streaming_begin("/error.low.g722");
+#ifdef UNIT16
+	audio_play("/error.g722");
+#else
+	audio_play("/error.low.g722");
+#endif
       }
     } else {
       // doorbell button released, reinit card reader
@@ -377,7 +413,6 @@ void loop() {
   if (voice_started && (!connected || millis() - voice_started >= VOICE_TIME_LIMIT)) {
     voice_end();
   }
-
   // handle OTA if we aren't doing anything time critical
   if (!audio_sampling() && !audio_playing()) { 
     ArduinoOTA.handle();
