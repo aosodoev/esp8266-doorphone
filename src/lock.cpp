@@ -1,33 +1,56 @@
 // #include<Arduino.h>
 #include <wiring_private.h>
 
+
+
+#ifdef __AVR_ATtiny13__
+
+#define MOTOR_LEFT 0
+#define MOTOR_RIGHT 1
+#define BUZZER 2
+#define CONTROL_PIN 3
+#define DOOR_SWITCH 4
+
+#else
+
 #define MOTOR_LEFT 4
 #define MOTOR_RIGHT 3
 #define BUZZER 0
 #define CONTROL_PIN 1
 #define DOOR_SWITCH 2
 
+#endif
+
 #define LOCK_TIMEOUT 30000 // wait 30 seconds before releasing the lock
 #define ACTUATOR_DELAY_PULL 250 // probably pulling load would be slower
 #define ACTUATOR_DELAY_RELEASE 250
-#define ACTUATOR_PULL_DUTY 64
+#define ACTUATOR_PULL_DUTY 96
 #define ACTUATOR_RELEASE_DUTY 128
 #define TONE_PERIOD 1000
 
 unsigned long toneRepeat = 0, lockTimeout = 0, debounce = 0, doorSwitchDebounce = 0;
 bool lockOpen = false, controlReading, lastControlState = false, initialDoorState, controlState, doorState, doorStateReading, lastDoorState;
 
+void bolt_release() {
+  digitalWrite(MOTOR_RIGHT, HIGH);
+  analogWrite(MOTOR_LEFT, 255 - ACTUATOR_RELEASE_DUTY);
+  delay(ACTUATOR_DELAY_RELEASE);
+  digitalWrite(MOTOR_LEFT, LOW);
+  digitalWrite(MOTOR_RIGHT, LOW);
+  lockOpen = false;
+}
+
 void setup() {
   
-  pinMode(CONTROL_PIN, INPUT_PULLUP);
-  pinMode(DOOR_SWITCH, INPUT_PULLUP);
-  digitalWrite(DOOR_SWITCH, HIGH);
+  pinMode(CONTROL_PIN, INPUT);
   digitalWrite(CONTROL_PIN, HIGH);
+  pinMode(DOOR_SWITCH, INPUT);
+  digitalWrite(DOOR_SWITCH, HIGH);
   pinMode(BUZZER, OUTPUT);
   pinMode(MOTOR_LEFT, OUTPUT);
   pinMode(MOTOR_RIGHT, OUTPUT);
-  digitalWrite(MOTOR_LEFT, LOW);
-  digitalWrite(MOTOR_RIGHT, LOW);
+  // digitalWrite(MOTOR_LEFT, LOW);
+  // digitalWrite(MOTOR_RIGHT, LOW);
   lastControlState = digitalRead(CONTROL_PIN);
 
   // three short beeps on boot
@@ -35,28 +58,28 @@ void setup() {
   digitalWrite(BUZZER, HIGH);
   
   // Make sure lock bolt is released (locked) on boot
-  digitalWrite(MOTOR_RIGHT, HIGH);
-  analogWrite(MOTOR_LEFT, 255 - ACTUATOR_RELEASE_DUTY);
-  delay(ACTUATOR_DELAY_RELEASE);
-  digitalWrite(MOTOR_LEFT, LOW);
-  digitalWrite(MOTOR_RIGHT, LOW);
+  bolt_release();
 
-
-  delay(300-ACTUATOR_DELAY_RELEASE);
+  delay(300-ACTUATOR_DELAY_RELEASE);  
   digitalWrite(BUZZER, LOW);
 
   // make it 3
-  for (int i = 0; i<2; i++) {
+  for (int i = 0; i<4; i++) {
     delay(300);
-    digitalWrite(BUZZER, HIGH);
-    delay(300);
-    digitalWrite(BUZZER, LOW);
+    if (i % 2) {
+      digitalWrite(BUZZER, LOW);
+    } else {
+      digitalWrite(BUZZER, HIGH);
+    }
   }
+  
+#ifndef __AVR_ATtiny13__
   
   // change timer1 PWM frequency for pin 4
   cbi(TCCR1, CS11); // CK/2048
   sbi(TCCR1, CS10); // uncomment to make it CK/4096
   // cbi(TCCR1, CS12); // CK/512
+#endif
 }
 
 void loop() {
@@ -107,12 +130,7 @@ void loop() {
     // give motor and capacitor some time to rest and recharge
     // after pulling lock bolt otherwise stall current is too high
     delay(200);
-    digitalWrite(MOTOR_RIGHT, HIGH);
-    analogWrite(MOTOR_LEFT, 255 - ACTUATOR_RELEASE_DUTY);
-    delay(ACTUATOR_DELAY_RELEASE);
-    digitalWrite(MOTOR_LEFT, LOW);
-    digitalWrite(MOTOR_RIGHT, LOW);
-    lockOpen = false;
+    bolt_release();
   }
 
   if (lockOpen && millis() - toneRepeat >= TONE_PERIOD) {
