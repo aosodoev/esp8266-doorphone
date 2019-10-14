@@ -1,0 +1,399 @@
+EESchema Schematic File Version 4
+LIBS:gates-v1-speaker-cache
+EELAYER 30 0
+EELAYER END
+$Descr A4 11693 8268
+encoding utf-8
+Sheet 1 1
+Title ""
+Date ""
+Rev ""
+Comp ""
+Comment1 ""
+Comment2 ""
+Comment3 ""
+Comment4 ""
+$EndDescr
+$Comp
+L power:PWR_FLAG #FLG01
+U 1 1 5BF5F5C5
+P 3250 1000
+F 0 "#FLG01" H 3250 1075 50  0001 C CNN
+F 1 "PWR_FLAG" V 3250 1128 50  0000 L CNN
+F 2 "" H 3250 1000 50  0001 C CNN
+F 3 "~" H 3250 1000 50  0001 C CNN
+	1    3250 1000
+	0    1    1    0   
+$EndComp
+$Comp
+L Analog_ADC:MCP3201 U1
+U 1 1 5BF6B0D1
+P 2350 2450
+F 0 "U1" H 1950 3050 50  0000 C CNN
+F 1 "MCP3201/TLC549IP" H 2900 2750 50  0000 C CNN
+F 2 "Package_SO:SSOP-8_3.9x5.05mm_P1.27mm" H 3100 2100 50  0001 C CNN
+F 3 "http://ww1.microchip.com/downloads/en/DeviceDoc/21290D.pdf" H 3150 2350 50  0001 C CNN
+	1    2350 2450
+	1    0    0    -1  
+$EndComp
+Text GLabel 2850 2350 2    50   Input ~ 0
+SCK
+Text GLabel 2850 2450 2    50   Input ~ 0
+MISO
+Text GLabel 2850 2550 2    50   Input ~ 0
+HCS
+$Comp
+L power:+3V3 #PWR010
+U 1 1 5BF6C0C4
+P 2450 2150
+F 0 "#PWR010" H 2450 2000 50  0001 C CNN
+F 1 "+3V3" H 2465 2323 50  0000 C CNN
+F 2 "" H 2450 2150 50  0001 C CNN
+F 3 "" H 2450 2150 50  0001 C CNN
+	1    2450 2150
+	1    0    0    -1  
+$EndComp
+$Comp
+L power:GND #PWR09
+U 1 1 5BF6C2B4
+P 2250 2750
+F 0 "#PWR09" H 2250 2500 50  0001 C CNN
+F 1 "GND" H 2255 2577 50  0000 C CNN
+F 2 "" H 2250 2750 50  0001 C CNN
+F 3 "" H 2250 2750 50  0001 C CNN
+	1    2250 2750
+	1    0    0    -1  
+$EndComp
+$Comp
+L power:GND #PWR08
+U 1 1 5BF6C486
+P 1850 2550
+F 0 "#PWR08" H 1850 2300 50  0001 C CNN
+F 1 "GND" H 1855 2377 50  0000 C CNN
+F 2 "" H 1850 2550 50  0001 C CNN
+F 3 "" H 1850 2550 50  0001 C CNN
+	1    1850 2550
+	1    0    0    -1  
+$EndComp
+Text GLabel 1850 2350 0    50   Input ~ 0
+MIC
+$Comp
+L Connector_Generic:Conn_01x04 J4
+U 1 1 5BF724CE
+P 2550 1200
+F 0 "J4" H 2500 700 50  0000 C CNN
+F 1 "MAIN_UNIT_SPI" H 2400 800 50  0000 C CNN
+F 2 "Connector_PinHeader_2.54mm:PinHeader_1x04_P2.54mm_Vertical" H 2550 1200 50  0001 C CNN
+F 3 "~" H 2550 1200 50  0001 C CNN
+	1    2550 1200
+	1    0    0    1   
+$EndComp
+Text GLabel 2350 1000 0    50   Input ~ 0
+MOSI
+Text GLabel 2350 1100 0    50   Input ~ 0
+MISO
+Text GLabel 2350 1200 0    50   Input ~ 0
+SCK
+Text GLabel 2350 1300 0    50   Input ~ 0
+GPIO16
+$Comp
+L power:GND #PWR013
+U 1 1 5BF74B94
+P 3250 1300
+F 0 "#PWR013" H 3250 1050 50  0001 C CNN
+F 1 "GND" H 3255 1127 50  0000 C CNN
+F 2 "" H 3250 1300 50  0001 C CNN
+F 3 "" H 3250 1300 50  0001 C CNN
+	1    3250 1300
+	1    0    0    -1  
+$EndComp
+$Comp
+L power:+3V3 #PWR012
+U 1 1 5BF74C74
+P 3250 1000
+F 0 "#PWR012" H 3250 850 50  0001 C CNN
+F 1 "+3V3" H 3265 1173 50  0000 C CNN
+F 2 "" H 3250 1000 50  0001 C CNN
+F 3 "" H 3250 1000 50  0001 C CNN
+	1    3250 1000
+	1    0    0    -1  
+$EndComp
+Text GLabel 3250 1200 2    50   Input ~ 0
+GPIO4
+NoConn ~ 5000 3300
+Wire Wire Line
+	5000 3650 5200 3650
+$Comp
+L power:+3V3 #PWR017
+U 1 1 5CA8D8DF
+P 5200 3650
+F 0 "#PWR017" H 5200 3500 50  0001 C CNN
+F 1 "+3V3" H 5215 3823 50  0000 C CNN
+F 2 "" H 5200 3650 50  0001 C CNN
+F 3 "" H 5200 3650 50  0001 C CNN
+	1    5200 3650
+	1    0    0    -1  
+$EndComp
+NoConn ~ 5000 3500
+Text GLabel 5000 3150 2    50   Input ~ 0
+AUD_OUT
+$Comp
+L power:GND #PWR016
+U 1 1 5CA8D0C2
+P 4100 3650
+F 0 "#PWR016" H 4100 3400 50  0001 C CNN
+F 1 "GND" H 4105 3477 50  0000 C CNN
+F 2 "" H 4100 3650 50  0001 C CNN
+F 3 "" H 4100 3650 50  0001 C CNN
+	1    4100 3650
+	1    0    0    -1  
+$EndComp
+Text GLabel 4100 3500 0    50   Input ~ 0
+MOSI
+Text GLabel 4100 3300 0    50   Input ~ 0
+HCS
+Text GLabel 4100 3150 0    50   Input ~ 0
+SCK
+$Comp
+L gates-v1-speaker-rescue:PT8211-pt8211 U2
+U 1 1 5CA8C038
+P 4550 3400
+F 0 "U2" H 4550 3917 50  0000 C CNN
+F 1 "PT8211" H 4550 3826 50  0000 C CNN
+F 2 "Package_SO:SSOP-8_3.9x5.05mm_P1.27mm" H 4550 3400 50  0001 C CIN
+F 3 "" H 4550 3400 50  0001 C CNN
+	1    4550 3400
+	1    0    0    -1  
+$EndComp
+$Comp
+L Connector_Generic:Conn_01x04 J5
+U 1 1 5D9609AE
+P 3050 1100
+F 0 "J5" H 3200 1500 50  0000 C CNN
+F 1 "MAIN_UNIT_MISC" H 2900 1500 50  0000 C CNN
+F 2 "Connector_PinHeader_2.54mm:PinHeader_1x04_P2.54mm_Vertical" H 3050 1100 50  0001 C CNN
+F 3 "~" H 3050 1100 50  0001 C CNN
+	1    3050 1100
+	-1   0    0    -1  
+$EndComp
+Text GLabel 3250 1100 2    50   Input ~ 0
+HCS
+Connection ~ 3250 1000
+$Comp
+L power:+3V3 #PWR0101
+U 1 1 5D965F6E
+P 2250 2150
+F 0 "#PWR0101" H 2250 2000 50  0001 C CNN
+F 1 "+3V3" H 2265 2323 50  0000 C CNN
+F 2 "" H 2250 2150 50  0001 C CNN
+F 3 "" H 2250 2150 50  0001 C CNN
+	1    2250 2150
+	1    0    0    -1  
+$EndComp
+$Comp
+L Connector_Generic:Conn_01x01 J1
+U 1 1 5D96722E
+P 1100 2350
+F 0 "J1" H 1100 2250 50  0000 C CNN
+F 1 "MIC_IN" H 1300 2350 50  0000 C CNN
+F 2 "TestPoint:TestPoint_Pad_2.0x2.0mm" H 1100 2350 50  0001 C CNN
+F 3 "~" H 1100 2350 50  0001 C CNN
+	1    1100 2350
+	-1   0    0    1   
+$EndComp
+Text GLabel 1300 2350 2    50   Input ~ 0
+MIC
+$Comp
+L Connector_Generic:Conn_01x01 J2
+U 1 1 5D967AD7
+P 1100 2600
+F 0 "J2" H 1100 2500 50  0000 C CNN
+F 1 "MIC_PWR" H 1350 2600 50  0000 C CNN
+F 2 "TestPoint:TestPoint_Pad_2.0x2.0mm" H 1100 2600 50  0001 C CNN
+F 3 "~" H 1100 2600 50  0001 C CNN
+	1    1100 2600
+	-1   0    0    1   
+$EndComp
+$Comp
+L power:+3V3 #PWR0102
+U 1 1 5D9682A4
+P 1300 2600
+F 0 "#PWR0102" H 1300 2450 50  0001 C CNN
+F 1 "+3V3" H 1315 2773 50  0000 C CNN
+F 2 "" H 1300 2600 50  0001 C CNN
+F 3 "" H 1300 2600 50  0001 C CNN
+	1    1300 2600
+	0    1    1    0   
+$EndComp
+$Comp
+L Connector_Generic:Conn_01x01 J3
+U 1 1 5D96A9CA
+P 1100 2850
+F 0 "J3" H 1100 2750 50  0000 C CNN
+F 1 "MIC_GND" H 1350 2850 50  0000 C CNN
+F 2 "TestPoint:TestPoint_Pad_2.0x2.0mm" H 1100 2850 50  0001 C CNN
+F 3 "~" H 1100 2850 50  0001 C CNN
+	1    1100 2850
+	-1   0    0    1   
+$EndComp
+$Comp
+L power:GND #PWR0103
+U 1 1 5D96ADA4
+P 1300 2850
+F 0 "#PWR0103" H 1300 2600 50  0001 C CNN
+F 1 "GND" H 1305 2677 50  0000 C CNN
+F 2 "" H 1300 2850 50  0001 C CNN
+F 3 "" H 1300 2850 50  0001 C CNN
+	1    1300 2850
+	1    0    0    -1  
+$EndComp
+$Comp
+L Connector_Generic:Conn_01x01 J9
+U 1 1 5D974A32
+P 5950 3100
+F 0 "J9" H 5950 3000 50  0000 C CNN
+F 1 "SPK_OUT" H 6150 3100 50  0000 C CNN
+F 2 "TestPoint:TestPoint_Pad_2.0x2.0mm" H 5950 3100 50  0001 C CNN
+F 3 "~" H 5950 3100 50  0001 C CNN
+	1    5950 3100
+	-1   0    0    1   
+$EndComp
+$Comp
+L Connector_Generic:Conn_01x01 J10
+U 1 1 5D974A39
+P 5950 3350
+F 0 "J10" H 5950 3250 50  0000 C CNN
+F 1 "SPK_PWR" H 6200 3350 50  0000 C CNN
+F 2 "TestPoint:TestPoint_Pad_2.0x2.0mm" H 5950 3350 50  0001 C CNN
+F 3 "~" H 5950 3350 50  0001 C CNN
+	1    5950 3350
+	-1   0    0    1   
+$EndComp
+$Comp
+L power:+3V3 #PWR0104
+U 1 1 5D974A3F
+P 6150 3350
+F 0 "#PWR0104" H 6150 3200 50  0001 C CNN
+F 1 "+3V3" H 6165 3523 50  0000 C CNN
+F 2 "" H 6150 3350 50  0001 C CNN
+F 3 "" H 6150 3350 50  0001 C CNN
+	1    6150 3350
+	0    1    1    0   
+$EndComp
+$Comp
+L Connector_Generic:Conn_01x01 J11
+U 1 1 5D974A45
+P 5950 3600
+F 0 "J11" H 5950 3500 50  0000 C CNN
+F 1 "SPK_GND" H 6200 3600 50  0000 C CNN
+F 2 "TestPoint:TestPoint_Pad_2.0x2.0mm" H 5950 3600 50  0001 C CNN
+F 3 "~" H 5950 3600 50  0001 C CNN
+	1    5950 3600
+	-1   0    0    1   
+$EndComp
+$Comp
+L power:GND #PWR0105
+U 1 1 5D974A4B
+P 6150 3600
+F 0 "#PWR0105" H 6150 3350 50  0001 C CNN
+F 1 "GND" H 6155 3427 50  0000 C CNN
+F 2 "" H 6150 3600 50  0001 C CNN
+F 3 "" H 6150 3600 50  0001 C CNN
+	1    6150 3600
+	1    0    0    -1  
+$EndComp
+Text GLabel 6150 3100 2    50   Input ~ 0
+AUD_OUT
+$Comp
+L Connector_Generic:Conn_01x07 J6
+U 1 1 5D975287
+P 4550 1300
+F 0 "J6" H 4630 1342 50  0000 L CNN
+F 1 "MFRC522" H 4630 1251 50  0000 L CNN
+F 2 "Connector_PinHeader_2.54mm:PinHeader_1x07_P2.54mm_Vertical" H 4550 1300 50  0001 C CNN
+F 3 "~" H 4550 1300 50  0001 C CNN
+	1    4550 1300
+	1    0    0    -1  
+$EndComp
+Text GLabel 4350 1000 0    50   Input ~ 0
+GPIO16
+Text GLabel 4350 1100 0    50   Input ~ 0
+SCK
+Text GLabel 4350 1200 0    50   Input ~ 0
+MOSI
+Text GLabel 4350 1300 0    50   Input ~ 0
+MISO
+$Comp
+L power:GND #PWR0106
+U 1 1 5D97644B
+P 3950 1400
+F 0 "#PWR0106" H 3950 1150 50  0001 C CNN
+F 1 "GND" H 3955 1227 50  0000 C CNN
+F 2 "" H 3950 1400 50  0001 C CNN
+F 3 "" H 3950 1400 50  0001 C CNN
+	1    3950 1400
+	1    0    0    -1  
+$EndComp
+Wire Wire Line
+	3950 1400 4350 1400
+Text GLabel 4350 1500 0    50   Input ~ 0
+GPIO4
+$Comp
+L power:+3V3 #PWR0107
+U 1 1 5D976EA5
+P 4350 1600
+F 0 "#PWR0107" H 4350 1450 50  0001 C CNN
+F 1 "+3V3" H 4365 1773 50  0000 C CNN
+F 2 "" H 4350 1600 50  0001 C CNN
+F 3 "" H 4350 1600 50  0001 C CNN
+	1    4350 1600
+	0    -1   -1   0   
+$EndComp
+$Comp
+L Connector_Generic:Conn_01x01 J8
+U 1 1 5D978BC1
+P 4950 2500
+F 0 "J8" H 4950 2400 50  0000 C CNN
+F 1 "BELL_GND" H 5200 2500 50  0000 C CNN
+F 2 "TestPoint:TestPoint_Pad_2.0x2.0mm" H 4950 2500 50  0001 C CNN
+F 3 "~" H 4950 2500 50  0001 C CNN
+	1    4950 2500
+	-1   0    0    1   
+$EndComp
+$Comp
+L power:GND #PWR0108
+U 1 1 5D978BC7
+P 5150 2500
+F 0 "#PWR0108" H 5150 2250 50  0001 C CNN
+F 1 "GND" H 5155 2327 50  0000 C CNN
+F 2 "" H 5150 2500 50  0001 C CNN
+F 3 "" H 5150 2500 50  0001 C CNN
+	1    5150 2500
+	1    0    0    -1  
+$EndComp
+$Comp
+L Connector_Generic:Conn_01x01 J7
+U 1 1 5D979249
+P 4950 2300
+F 0 "J7" H 4950 2200 50  0000 C CNN
+F 1 "BELL_BTN" H 5250 2300 50  0000 C CNN
+F 2 "TestPoint:TestPoint_Pad_2.0x2.0mm" H 4950 2300 50  0001 C CNN
+F 3 "~" H 4950 2300 50  0001 C CNN
+	1    4950 2300
+	-1   0    0    1   
+$EndComp
+Text GLabel 5150 2300 2    50   Input ~ 0
+GPIO4
+$Comp
+L power:PWR_FLAG #FLG0101
+U 1 1 5D97986B
+P 3250 1300
+F 0 "#FLG0101" H 3250 1375 50  0001 C CNN
+F 1 "PWR_FLAG" V 3250 1428 50  0000 L CNN
+F 2 "" H 3250 1300 50  0001 C CNN
+F 3 "~" H 3250 1300 50  0001 C CNN
+	1    3250 1300
+	0    1    1    0   
+$EndComp
+Connection ~ 3250 1300
+$EndSCHEMATC
