@@ -2,3 +2,5 @@
 .pio
 .clang_complete
 src/AP_credentials.h
+extra/OpenSCAD/images
+extra/OpenSCAD/stl
