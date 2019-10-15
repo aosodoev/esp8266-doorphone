@@ -70,5 +70,10 @@ This implementation of RFID access control isn't even remotely secure and should
 
 - Error: [https://freesound.org/people/Breviceps/sounds/445978/](https://freesound.org/people/Breviceps/sounds/445978/)
 
-- Door bell: [https://freesound.org/people/pac007/sounds/331567/](https://freesound.org/people/pac007/sounds/331567/)
+- "Door bell": [https://freesound.org/people/pac007/sounds/331567/](https://freesound.org/people/pac007/sounds/331567/)
 
+- "Chirp": [https://freesound.org/people/IFartInUrGeneralDirection/sounds/96195/](https://freesound.org/people/IFartInUrGeneralDirection/sounds/96195/)
+
+- "Electronic chirp": [https://freesound.org/people/organicmanpl/sounds/386973/](https://freesound.org/people/organicmanpl/sounds/386973/)
+
+- "Echo": [https://freesound.org/people/Thoribass/sounds/254819/](https://freesound.org/people/Thoribass/sounds/254819/)
